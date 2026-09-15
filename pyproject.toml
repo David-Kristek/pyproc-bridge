@@ -1,0 +1,33 @@
+[project]
+name = "pyproc-bridge"
+version = "0.1.0"
+description = "Spawn a legacy or other-arch Python interpreter as a worker subprocess and drive it over a small IPC protocol: one task in, streamed events, one terminal result."
+readme = "README.md"
+license = "MIT"
+authors = [{ name = "David Kristek", email = "david.kristek05@gmail.com" }]
+requires-python = ">=3.7"
+# Zero third-party dependencies -- everything here is standard library, so
+# this stays importable under very old interpreters as well as modern ones.
+dependencies = []
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.7",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: System :: Distributed Computing",
+    "Topic :: Software Development :: Libraries",
+]
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["pyproc_bridge"]
