@@ -12,7 +12,10 @@ environment prep stay the caller's job.
 from __future__ import annotations
 
 import concurrent.futures as futures
+import os
+import shutil
 import subprocess
+import tempfile
 import time
 from typing import Any, Callable
 
@@ -25,6 +28,57 @@ from pyproc_bridge.concurrency import submit
 WORKER_STARTUP_TIMEOUT = 30.0
 # Seconds to let the worker shut down cleanly after an abort before it is killed.
 WORKER_SHUTDOWN_TIMEOUT = 10.0
+
+# The actual ``pyproc_bridge`` package directory. Its parent can't just go on
+# PYTHONPATH: when this install is a normal dependency (not a bare checkout),
+# that parent is a whole venv's site-packages, and everything else living
+# there would leak onto the spawned interpreter's PYTHONPATH too -- see
+# ``_staged_bridge_dir``.
+_PACKAGE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def _staged_bridge_dir() -> str:
+    """Copy just the ``pyproc_bridge`` package into an isolated staging
+    directory and return that directory's path (the parent of the copy, i.e.
+    what belongs on PYTHONPATH).
+
+    Re-copying on every call is deliberate: it's a handful of small, pure
+    stdlib .py files with no build step, and it keeps the staged copy from
+    ever going stale against local edits during development.
+    """
+    staging_root = os.path.join(tempfile.gettempdir(), "pyproc_bridge_pythonpath_shim")
+    dest = os.path.join(staging_root, "pyproc_bridge")
+    shutil.rmtree(dest, ignore_errors=True)
+    shutil.copytree(_PACKAGE_DIR, dest)
+    return staging_root
+
+
+def add_bridge_to_pythonpath(env: dict[str, str]) -> dict[str, str]:
+    """Return a copy of ``env`` with an isolated copy of this ``pyproc_bridge``
+    install's directory prepended to ``PYTHONPATH``.
+
+    The worker module always needs ``import pyproc_bridge`` (for ``protocol``
+    and ``Worker``) to succeed in the spawned interpreter. Rather than
+    requiring pyproc_bridge to be installed there too, callers can pass the
+    env through this before handing it to ``run_legacy_python_worker`` so the
+    same on-disk copy is importable without any install step -- handy when
+    the legacy interpreter has no package manager access of its own. The
+    package is staged into its own directory first (see
+    ``_staged_bridge_dir``) rather than putting this install's own parent
+    directory on PYTHONPATH directly, since that parent is whatever directory
+    happens to contain it -- a bare checkout when used standalone, but a
+    whole venv's site-packages (with unrelated, possibly
+    architecture-incompatible packages) when installed as a normal
+    dependency, which would otherwise leak onto the spawned interpreter's
+    import path too.
+    """
+    env = dict(env)
+    bridge_dir = _staged_bridge_dir()
+    existing = env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = (
+        os.pathsep.join([bridge_dir, existing]) if existing else bridge_dir
+    )
+    return env
 
 
 def run_legacy_python_worker(

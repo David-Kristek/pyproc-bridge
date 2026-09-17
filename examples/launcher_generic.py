@@ -18,7 +18,7 @@ from __future__ import annotations
 import os
 import sys
 
-from pyproc_bridge.launcher import run_legacy_python_worker_sync
+from pyproc_bridge.launcher import add_bridge_to_pythonpath, run_legacy_python_worker
 from pyproc_bridge.abort import AbortSignal
 
 PORT = 5556
@@ -29,19 +29,32 @@ def on_event(data) -> None:
 
 
 def main() -> None:
-    env = os.environ.copy()
-    result = run_legacy_python_worker_sync(
+    # Makes "import pyproc_bridge" work in the worker without it being
+    # installed in that interpreter -- drop this if the legacy interpreter
+    # already has its own install (or a vendored copy) of pyproc_bridge.
+    env = add_bridge_to_pythonpath(os.environ.copy())
+    abort_signal = AbortSignal()
+    future = run_legacy_python_worker(
         sys.executable,  # stand-in for another legacy interpreter's path
         "examples.worker_echo",
-        {"count": 5, "delay_s": 0.3},
+        {"count": 10, "delay_s": 0.3},
         on_event,
-        AbortSignal(),
+        abort=abort_signal,
         port=PORT,
         env=env,
         port_env_var="IPC_PORT",
         worker_label="echo worker",
     )
-    print(f"result: {result}")
+    input("Press Enter to abort the worker (or wait for it to finish)...")
+    abort_signal.abort()
+    if future.done():
+        print(f"result: {future.result()}")
+    elif abort_signal.aborted: 
+        print("worker aborted before finishing")
+    else: 
+        print("worker still running after abort signal, waiting for it to finish...")
+        print(f"result: {future.result()}")
+
 
 
 if __name__ == "__main__":

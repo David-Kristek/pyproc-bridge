@@ -66,6 +66,11 @@ class IPCNode:
                         print(f"[IPC] Handler error for '{event_name}': {e}")
                 else:
                     print(f"[IPC] Warning: Unhandled event '{event_name}'")
+            except (ConnectionResetError, ConnectionAbortedError):
+                # The peer (or its process) went away abruptly -- e.g. a forced
+                # kill during abort teardown sends a TCP RST instead of a clean
+                # FIN. Treat it like the graceful-EOF case, not a real error.
+                break
             except Exception as e:
                 if self._running:
                     print(f"[IPC] Listener error: {e}")
@@ -83,6 +88,9 @@ class IPCNode:
                 payload = json.dumps(msg).encode('utf-8')
                 header = struct.pack('!I', len(payload))
                 self.sock.sendall(header + payload)
+            except (ConnectionResetError, ConnectionAbortedError, BrokenPipeError):
+                self._running = False
+                break
             except Exception as e:
                 if self._running:
                     print(f"[IPC] Writer error: {e}")
